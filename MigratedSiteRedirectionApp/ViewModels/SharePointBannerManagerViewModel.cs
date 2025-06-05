@@ -1,8 +1,10 @@
 using System;
-using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
+using System.Windows;
 using System.Windows.Input;
+using MigratedSiteRedirectionApp.Logic;
 
 namespace MigratedSiteRedirectionApp.ViewModels
 {
@@ -11,8 +13,9 @@ namespace MigratedSiteRedirectionApp.ViewModels
         private string _siteUrl;
         private string _bannerMessage;
         private string _jsCode;
-        private string _selectedMode;
+        private bool _isProcessing;
         private ICommand _applyActionCommand;
+        private readonly BannerManager _bannerManager;
 
         public SharePointBannerManagerViewModel()
         {
@@ -21,20 +24,11 @@ namespace MigratedSiteRedirectionApp.ViewModels
             BannerMessage = "Important Notice: Scheduled maintenance will occur on [Date]. Please check the status page for updates.";
             JsCode = "// Enter JavaScript code for banner redirection here...";
             
-            // Initialize available modes
-            AvailableModes = new ObservableCollection<string>
-            {
-                "Select a mode...",
-                "Add Banner",
-                "Update Banner",
-                "Remove Banner",
-                "Test Banner"
-            };
-            
-            SelectedMode = AvailableModes[0];
+            // Initialize banner manager
+            _bannerManager = new BannerManager();
             
             // Initialize command
-            ApplyActionCommand = new RelayCommand(ExecuteApplyAction, CanExecuteApplyAction);
+            ApplyActionCommand = new AsyncRelayCommand(ExecuteApplyActionAsync, CanExecuteApplyAction);
         }
 
         public string SiteUrl
@@ -46,7 +40,6 @@ namespace MigratedSiteRedirectionApp.ViewModels
                 {
                     _siteUrl = value;
                     OnPropertyChanged();
-                    CommandManager.InvalidateRequerySuggested();
                 }
             }
         }
@@ -77,21 +70,18 @@ namespace MigratedSiteRedirectionApp.ViewModels
             }
         }
 
-        public string SelectedMode
+        public bool IsProcessing
         {
-            get => _selectedMode;
+            get => _isProcessing;
             set
             {
-                if (_selectedMode != value)
+                if (_isProcessing != value)
                 {
-                    _selectedMode = value;
+                    _isProcessing = value;
                     OnPropertyChanged();
-                    CommandManager.InvalidateRequerySuggested();
                 }
             }
         }
-
-        public ObservableCollection<string> AvailableModes { get; }
 
         public ICommand ApplyActionCommand
         {
@@ -105,25 +95,48 @@ namespace MigratedSiteRedirectionApp.ViewModels
 
         private bool CanExecuteApplyAction(object parameter)
         {
-            // Validate that required fields are filled
-            return !string.IsNullOrWhiteSpace(SiteUrl) &&
-                   !string.IsNullOrWhiteSpace(BannerMessage) &&
-                   SelectedMode != "Select a mode..." &&
-                   !string.IsNullOrWhiteSpace(SelectedMode);
+            // Can execute if not currently processing
+            return !IsProcessing;
         }
 
-        private void ExecuteApplyAction(object parameter)
+        private async Task ExecuteApplyActionAsync(object parameter)
         {
-            // TODO: Implement the actual action based on the selected mode
-            // For now, we'll just show a placeholder
-            string message = $"Action '{SelectedMode}' will be applied to:\n" +
-                           $"Site: {SiteUrl}\n" +
-                           $"Banner Message: {BannerMessage.Substring(0, Math.Min(50, BannerMessage.Length))}...\n" +
-                           $"JS Code: {(string.IsNullOrWhiteSpace(JsCode) ? "None" : "Provided")}";
-            
-            System.Windows.MessageBox.Show(message, "Apply Action", 
-                System.Windows.MessageBoxButton.OK, 
-                System.Windows.MessageBoxImage.Information);
+            IsProcessing = true;
+
+            try
+            {
+                // Apply banner using the BannerManager
+                var result = await _bannerManager.ApplyBannerAsync(SiteUrl, BannerMessage, JsCode);
+
+                if (result.IsSuccess)
+                {
+                    MessageBox.Show(
+                        result.Message,
+                        "Success",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                }
+                else
+                {
+                    MessageBox.Show(
+                        result.ErrorMessage,
+                        "Error",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    $"An unexpected error occurred: {ex.Message}",
+                    "Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+            finally
+            {
+                IsProcessing = false;
+            }
         }
 
         public event PropertyChangedEventHandler PropertyChanged;
@@ -134,15 +147,15 @@ namespace MigratedSiteRedirectionApp.ViewModels
         }
     }
 
-    // Simple RelayCommand implementation
-    public class RelayCommand : ICommand
+    // AsyncRelayCommand implementation for async operations
+    public class AsyncRelayCommand : ICommand
     {
-        private readonly Action<object> _execute;
+        private readonly Func<object, Task> _executeAsync;
         private readonly Predicate<object> _canExecute;
 
-        public RelayCommand(Action<object> execute, Predicate<object> canExecute = null)
+        public AsyncRelayCommand(Func<object, Task> executeAsync, Predicate<object> canExecute = null)
         {
-            _execute = execute ?? throw new ArgumentNullException(nameof(execute));
+            _executeAsync = executeAsync ?? throw new ArgumentNullException(nameof(executeAsync));
             _canExecute = canExecute;
         }
 
@@ -157,9 +170,9 @@ namespace MigratedSiteRedirectionApp.ViewModels
             return _canExecute?.Invoke(parameter) ?? true;
         }
 
-        public void Execute(object parameter)
+        public async void Execute(object parameter)
         {
-            _execute(parameter);
+            await _executeAsync(parameter);
         }
     }
 
