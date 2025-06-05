@@ -11,6 +11,7 @@
         ResizeMode="CanMinimize"
         WindowStartupLocation="CenterScreen">
     <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
         <Style x:Key="SectionHeaderStyle" TargetType="TextBlock">
             <Setter Property="FontSize" Value="14"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
@@ -50,6 +51,10 @@
                 <Trigger Property="IsPressed" Value="True">
                     <Setter Property="Background" Value="#FF3D5E7A"/>
                 </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Background" Value="#FFB0B0B0"/>
+                    <Setter Property="Cursor" Value="Wait"/>
+                </Trigger>
             </Style.Triggers>
         </Style>
     </Window.Resources>
@@ -60,114 +65,126 @@
                 <DropShadowEffect BlurRadius="10" Opacity="0.1" ShadowDepth="2"/>
             </Border.Effect>
             
-            <StackPanel Margin="40">
-                <!-- Header -->
-                <StackPanel Margin="0,0,0,24">
-                    <TextBlock FontSize="28" FontWeight="Bold">
-                        SharePoint Banner Manager 🚀
-                    </TextBlock>
-                    <TextBlock FontSize="16" Foreground="#FF666666" Margin="0,8,0,0">
-                        Apply and manage informational banners on SharePoint site collections.
-                    </TextBlock>
-                </StackPanel>
-                
-                <!-- Section 1: SharePoint Site Collection URL -->
-                <StackPanel Margin="0,0,0,24">
-                    <TextBlock Style="{StaticResource SectionHeaderStyle}">
-                        1. SharePoint Site Collection URL
-                    </TextBlock>
-                    <TextBox x:Name="SiteUrlTextBox"
-                             Text="{Binding SiteUrl, UpdateSourceTrigger=PropertyChanged}"
-                             Height="40"
-                             Padding="12,8"
-                             FontSize="14"
-                             BorderBrush="#FFDDDDDD"
-                             VerticalContentAlignment="Center"/>
-                    <TextBlock Text="Enter the full URL of the site where the banner will be displayed."
-                               Foreground="#FF888888"
-                               FontSize="12"
-                               Margin="0,4,0,0"/>
-                </StackPanel>
-                
-                <!-- Section 2: Banner Message -->
-                <StackPanel Margin="0,0,0,24">
-                    <TextBlock Style="{StaticResource SectionHeaderStyle}">
-                        2. Banner Message (Rich Text / HTML)
-                    </TextBlock>
-                    <TextBox x:Name="BannerMessageTextBox"
-                             Text="{Binding BannerMessage, UpdateSourceTrigger=PropertyChanged}"
-                             Height="120"
-                             Padding="12"
-                             FontSize="14"
-                             TextWrapping="Wrap"
-                             AcceptsReturn="True"
-                             VerticalScrollBarVisibility="Auto"
-                             BorderBrush="#FFDDDDDD"
-                             FontFamily="Consolas"/>
-                </StackPanel>
-                
-                <!-- Note -->
-                <Border Style="{StaticResource NoteStyle}">
-                    <TextBlock TextWrapping="Wrap" FontSize="13">
-                        <Bold>Note:</Bold> Banners will be displayed using the standard SharePoint notification bar (typically a yellow bar at the top of the page).
-                    </TextBlock>
-                </Border>
-                
-                <!-- Section 3: Manipulate site collection mode -->
-                <Grid Margin="0,0,0,24">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="200"/>
-                    </Grid.ColumnDefinitions>
-                    
-                    <StackPanel Grid.Column="0">
-                        <TextBlock Style="{StaticResource SectionHeaderStyle}">
-                            3. Manipulate site collection mode
+            <Grid>
+                <StackPanel Margin="40" IsEnabled="{Binding IsProcessing, Converter={StaticResource BoolToVisibility}, ConverterParameter=Inverse}">
+                    <!-- Header -->
+                    <StackPanel Margin="0,0,0,24">
+                        <TextBlock FontSize="28" FontWeight="Bold">
+                            SharePoint Banner Manager 🚀
                         </TextBlock>
-                        <ComboBox x:Name="ModeComboBox"
-                                  Height="40"
-                                  Padding="12,8"
-                                  FontSize="14"
-                                  BorderBrush="#FFDDDDDD"
-                                  VerticalContentAlignment="Center"
-                                  IsEnabled="False"
-                                  Background="#FFF0F0F0">
-                        </ComboBox>
+                        <TextBlock FontSize="16" Foreground="#FF666666" Margin="0,8,0,0">
+                            Apply and manage informational banners on SharePoint site collections.
+                        </TextBlock>
                     </StackPanel>
                     
-                    <Button Grid.Column="1"
-                            Style="{StaticResource ActionButtonStyle}"
-                            Command="{Binding ApplyActionCommand}"
-                            Height="40"
-                            VerticalAlignment="Bottom"
-                            Margin="16,0,0,0">
-                        Apply Action
-                    </Button>
-                </Grid>
-                
-                <!-- Section 4: Banner JS Code -->
-                <StackPanel Margin="0,0,0,16">
-                    <TextBlock Style="{StaticResource SectionHeaderStyle}">
-                        4. Banner JS Code (for redirection)
-                    </TextBlock>
-                    <TextBox x:Name="JsCodeTextBox"
-                             Text="{Binding JsCode, UpdateSourceTrigger=PropertyChanged}"
-                             Height="120"
-                             Padding="12"
-                             FontSize="13"
-                             FontFamily="Consolas"
-                             TextWrapping="Wrap"
-                             AcceptsReturn="True"
-                             VerticalScrollBarVisibility="Auto"
-                             Background="#FF1E1E1E"
-                             Foreground="#FFCCCCCC"
-                             BorderBrush="#FF333333"/>
-                    <TextBlock Text="This JS will be part of the banner. Use with caution."
-                               Foreground="#FF888888"
-                               FontSize="12"
-                               Margin="0,4,0,0"/>
+                    <!-- Section 1: SharePoint Site Collection URL -->
+                    <StackPanel Margin="0,0,0,24">
+                        <TextBlock Style="{StaticResource SectionHeaderStyle}">
+                            1. SharePoint Site Collection URL
+                        </TextBlock>
+                        <TextBox x:Name="SiteUrlTextBox"
+                                 Text="{Binding SiteUrl, UpdateSourceTrigger=PropertyChanged}"
+                                 Height="40"
+                                 Padding="12,8"
+                                 FontSize="14"
+                                 BorderBrush="#FFDDDDDD"
+                                 VerticalContentAlignment="Center"
+                                 IsEnabled="{Binding IsProcessing, Converter={StaticResource BoolToVisibility}, ConverterParameter=Inverse}"/>
+                        <TextBlock Text="Enter the full URL of the site where the banner will be displayed."
+                                   Foreground="#FF888888"
+                                   FontSize="12"
+                                   Margin="0,4,0,0"/>
+                    </StackPanel>
+                    
+                    <!-- Section 2: Banner Message -->
+                    <StackPanel Margin="0,0,0,24">
+                        <TextBlock Style="{StaticResource SectionHeaderStyle}">
+                            2. Banner Message (Rich Text / HTML)
+                        </TextBlock>
+                        <TextBox x:Name="BannerMessageTextBox"
+                                 Text="{Binding BannerMessage, UpdateSourceTrigger=PropertyChanged}"
+                                 Height="120"
+                                 Padding="12"
+                                 FontSize="14"
+                                 TextWrapping="Wrap"
+                                 AcceptsReturn="True"
+                                 VerticalScrollBarVisibility="Auto"
+                                 BorderBrush="#FFDDDDDD"
+                                 FontFamily="Consolas"
+                                 IsEnabled="{Binding IsProcessing, Converter={StaticResource BoolToVisibility}, ConverterParameter=Inverse}"/>
+                    </StackPanel>
+                    
+                    <!-- Note -->
+                    <Border Style="{StaticResource NoteStyle}">
+                        <TextBlock TextWrapping="Wrap" FontSize="13">
+                            <Bold>Note:</Bold> Banners will be displayed using the standard SharePoint notification bar (typically a yellow bar at the top of the page).
+                        </TextBlock>
+                    </Border>
+                    
+                    <!-- Section 3: Manipulate site collection mode -->
+                    <Grid Margin="0,0,0,24">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="200"/>
+                        </Grid.ColumnDefinitions>
+                        
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Style="{StaticResource SectionHeaderStyle}">
+                                3. Manipulate site collection mode
+                            </TextBlock>
+                            <ComboBox x:Name="ModeComboBox"
+                                      Height="40"
+                                      Padding="12,8"
+                                      FontSize="14"
+                                      BorderBrush="#FFDDDDDD"
+                                      VerticalContentAlignment="Center"
+                                      IsEnabled="False"
+                                      Background="#FFF0F0F0">
+                            </ComboBox>
+                        </StackPanel>
+                        
+                        <Button Grid.Column="1"
+                                Style="{StaticResource ActionButtonStyle}"
+                                Command="{Binding ApplyActionCommand}"
+                                Height="40"
+                                VerticalAlignment="Bottom"
+                                Margin="16,0,0,0"
+                                IsEnabled="{Binding IsProcessing, Converter={StaticResource BoolToVisibility}, ConverterParameter=Inverse}">
+                            <Grid>
+                                <TextBlock Text="Apply Action" Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVisibility}, ConverterParameter=Inverse}"/>
+                                <StackPanel Orientation="Horizontal" Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVisibility}}">
+                                    <ProgressBar IsIndeterminate="True" Width="20" Height="20" Margin="0,0,8,0"/>
+                                    <TextBlock Text="Processing..." VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Grid>
+                        </Button>
+                    </Grid>
+                    
+                    <!-- Section 4: Banner JS Code -->
+                    <StackPanel Margin="0,0,0,16">
+                        <TextBlock Style="{StaticResource SectionHeaderStyle}">
+                            4. Banner JS Code (for redirection)
+                        </TextBlock>
+                        <TextBox x:Name="JsCodeTextBox"
+                                 Text="{Binding JsCode, UpdateSourceTrigger=PropertyChanged}"
+                                 Height="120"
+                                 Padding="12"
+                                 FontSize="13"
+                                 FontFamily="Consolas"
+                                 TextWrapping="Wrap"
+                                 AcceptsReturn="True"
+                                 VerticalScrollBarVisibility="Auto"
+                                 Background="#FF1E1E1E"
+                                 Foreground="#FFCCCCCC"
+                                 BorderBrush="#FF333333"
+                                 IsEnabled="{Binding IsProcessing, Converter={StaticResource BoolToVisibility}, ConverterParameter=Inverse}"/>
+                        <TextBlock Text="This JS will be part of the banner. Use with caution."
+                                   Foreground="#FF888888"
+                                   FontSize="12"
+                                   Margin="0,4,0,0"/>
+                    </StackPanel>
                 </StackPanel>
-            </StackPanel>
+            </Grid>
         </Border>
     </Grid>
 </Window>
