@@ -8,6 +8,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using MigratedSiteRedirectionApp.Views;
 
 namespace MigratedSiteRedirectionApp
 {
@@ -19,6 +20,12 @@ namespace MigratedSiteRedirectionApp
         public MainWindow()
         {
             InitializeComponent();
+        }
+
+        private void OpenSharePointBannerManagerButton_Click(object sender, RoutedEventArgs e)
+        {
+            var sharePointBannerManagerWindow = new SharePointBannerManagerView();
+            sharePointBannerManagerWindow.ShowDialog();
         }
     }
 }
