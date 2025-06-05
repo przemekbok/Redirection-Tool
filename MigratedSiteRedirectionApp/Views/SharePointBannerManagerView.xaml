@@ -47,6 +47,9 @@
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter Property="Background" Value="#FF486E8A"/>
                 </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Background" Value="#FF3D5E7A"/>
+                </Trigger>
             </Style.Triggers>
         </Style>
     </Window.Resources>
@@ -122,18 +125,13 @@
                             3. Manipulate site collection mode
                         </TextBlock>
                         <ComboBox x:Name="ModeComboBox"
-                                  SelectedItem="{Binding SelectedMode}"
-                                  ItemsSource="{Binding AvailableModes}"
                                   Height="40"
                                   Padding="12,8"
                                   FontSize="14"
                                   BorderBrush="#FFDDDDDD"
-                                  VerticalContentAlignment="Center">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding}"/>
-                                </DataTemplate>
-                            </ComboBox.ItemTemplate>
+                                  VerticalContentAlignment="Center"
+                                  IsEnabled="False"
+                                  Background="#FFF0F0F0">
                         </ComboBox>
                     </StackPanel>
                     
