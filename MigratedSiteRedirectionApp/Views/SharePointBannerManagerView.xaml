@@ -4,6 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:MigratedSiteRedirectionApp.Views"
+        xmlns:converters="clr-namespace:MigratedSiteRedirectionApp.Logic.Converters"
         mc:Ignorable="d"
         Title="SharePoint Banner Manager" 
         Height="820" 
@@ -12,6 +13,8 @@
         WindowStartupLocation="CenterScreen">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
+        <converters:InverseBooleanConverter x:Key="InverseBool"/>
+        <converters:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVisibility"/>
         <Style x:Key="SectionHeaderStyle" TargetType="TextBlock">
             <Setter Property="FontSize" Value="14"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
@@ -66,7 +69,7 @@
             </Border.Effect>
             
             <Grid>
-                <StackPanel Margin="40" IsEnabled="{Binding IsProcessing, Converter={StaticResource BoolToVisibility}, ConverterParameter=Inverse}">
+                <StackPanel Margin="40">
                     <!-- Header -->
                     <StackPanel Margin="0,0,0,24">
                         <TextBlock FontSize="28" FontWeight="Bold">
@@ -89,7 +92,7 @@
                                  FontSize="14"
                                  BorderBrush="#FFDDDDDD"
                                  VerticalContentAlignment="Center"
-                                 IsEnabled="{Binding IsProcessing, Converter={StaticResource BoolToVisibility}, ConverterParameter=Inverse}"/>
+                                 IsEnabled="{Binding IsProcessing, Converter={StaticResource InverseBool}}"/>
                         <TextBlock Text="Enter the full URL of the site where the banner will be displayed."
                                    Foreground="#FF888888"
                                    FontSize="12"
@@ -111,7 +114,7 @@
                                  VerticalScrollBarVisibility="Auto"
                                  BorderBrush="#FFDDDDDD"
                                  FontFamily="Consolas"
-                                 IsEnabled="{Binding IsProcessing, Converter={StaticResource BoolToVisibility}, ConverterParameter=Inverse}"/>
+                                 IsEnabled="{Binding IsProcessing, Converter={StaticResource InverseBool}}"/>
                     </StackPanel>
                     
                     <!-- Note -->
@@ -149,11 +152,10 @@
                                 Height="40"
                                 VerticalAlignment="Bottom"
                                 Margin="16,0,0,0"
-                                IsEnabled="{Binding IsProcessing, Converter={StaticResource BoolToVisibility}, ConverterParameter=Inverse}">
+                                IsEnabled="{Binding IsProcessing, Converter={StaticResource InverseBool}}">
                             <Grid>
-                                <TextBlock Text="Apply Action" Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVisibility}, ConverterParameter=Inverse}"/>
+                                <TextBlock Text="Apply Action" Visibility="{Binding IsProcessing, Converter={StaticResource InverseBoolToVisibility}}"/>
                                 <StackPanel Orientation="Horizontal" Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVisibility}}">
-                                    <ProgressBar IsIndeterminate="True" Width="20" Height="20" Margin="0,0,8,0"/>
                                     <TextBlock Text="Processing..." VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Grid>
@@ -177,13 +179,26 @@
                                  Background="#FF1E1E1E"
                                  Foreground="#FFCCCCCC"
                                  BorderBrush="#FF333333"
-                                 IsEnabled="{Binding IsProcessing, Converter={StaticResource BoolToVisibility}, ConverterParameter=Inverse}"/>
+                                 IsEnabled="{Binding IsProcessing, Converter={StaticResource InverseBool}}"/>
                         <TextBlock Text="This JS will be part of the banner. Use with caution."
                                    Foreground="#FF888888"
                                    FontSize="12"
                                    Margin="0,4,0,0"/>
                     </StackPanel>
                 </StackPanel>
+                
+                <!-- Processing Overlay -->
+                <Border Background="#80000000" 
+                        Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVisibility}}"
+                        CornerRadius="8">
+                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                        <ProgressBar IsIndeterminate="True" Width="200" Height="24" Margin="0,0,0,16"/>
+                        <TextBlock Text="Applying banner to SharePoint site..." 
+                                   Foreground="White" 
+                                   FontSize="16" 
+                                   HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
             </Grid>
         </Border>
     </Grid>
