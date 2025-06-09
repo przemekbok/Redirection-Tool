@@ -3,11 +3,11 @@ using System.Configuration;
 using System.Net;
 using System.Security;
 using Microsoft.SharePoint.Client;
-using Microsoft.Identity.Client;
 using System.Security.Cryptography.X509Certificates;
 using System.IdentityModel.Tokens.Jwt;
 using System.Collections.Generic;
 using System.Linq;
+using System.Windows;
 
 namespace MigratedSiteRedirectionApp.Service
 {
@@ -28,22 +28,35 @@ namespace MigratedSiteRedirectionApp.Service
 
         public ClientContext GetAuthenticatedContext(string siteUrl)
         {
-            // Try different authentication methods based on configuration
-            
-            // Method 1: If certificate thumbprint is provided, use High-Trust authentication
-            if (!string.IsNullOrEmpty(_certificateThumbprint))
+            try
             {
-                return GetHighTrustContext(siteUrl);
+                // Try different authentication methods based on configuration
+                
+                // Method 1: If certificate thumbprint is provided, use High-Trust authentication
+                if (!string.IsNullOrEmpty(_certificateThumbprint))
+                {
+                    return GetHighTrustContext(siteUrl);
+                }
+                
+                // Method 2: If client secret is provided, use SharePoint app authentication
+                if (!string.IsNullOrEmpty(_clientId) && !string.IsNullOrEmpty(_clientSecret))
+                {
+                    return GetAppAuthContext(siteUrl);
+                }
+                
+                // Method 3: Fall back to user credentials
+                return GetUserCredentialContext(siteUrl);
             }
-            
-            // Method 2: If client secret is provided, use app-only authentication
-            if (!string.IsNullOrEmpty(_clientId) && !string.IsNullOrEmpty(_clientSecret))
+            catch (Exception ex)
             {
-                return GetAppOnlyContext(siteUrl);
+                // If all authentication methods fail, show error dialog
+                MessageBox.Show(
+                    $"Authentication failed. Please check your configuration.\n\nError: {ex.Message}",
+                    "SharePoint Authentication Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+                throw;
             }
-            
-            // Method 3: Fall back to current user credentials (Windows authentication)
-            return GetUserContext(siteUrl);
         }
 
         private ClientContext GetHighTrustContext(string siteUrl)
@@ -76,91 +89,185 @@ namespace MigratedSiteRedirectionApp.Service
             return context;
         }
 
-        private ClientContext GetAppOnlyContext(string siteUrl)
+        private ClientContext GetAppAuthContext(string siteUrl)
         {
             var context = new ClientContext(siteUrl);
             
             try
             {
-                // For SharePoint Online, use standard app-only authentication
-                // For SharePoint 2016 on-premises, this might need adjustment based on your OAuth configuration
-                
+                // For SharePoint 2016 on-premises with registered app
                 var siteUri = new Uri(siteUrl);
                 var realm = GetRealmFromTargetUrl(siteUri);
                 
-                // Simple implementation for SharePoint app-only auth
-                var authManager = new OfficeDevPnP.Core.AuthenticationManager();
-                context = authManager.GetAppOnlyAuthenticatedContext(siteUrl, _clientId, _clientSecret);
+                // Use SharePoint app-only authentication token
+                var accessToken = GetAppOnlyAccessToken(siteUri, realm);
+                
+                context.ExecutingWebRequest += (sender, e) =>
+                {
+                    e.WebRequestExecutor.RequestHeaders["Authorization"] = "Bearer " + accessToken;
+                };
             }
             catch (Exception ex)
             {
-                // If app-only fails, provide guidance
                 throw new InvalidOperationException(
-                    "App-only authentication failed. For SharePoint 2016 on-premises, ensure:\n" +
-                    "1. The app is properly registered in SharePoint\n" +
-                    "2. App permissions are granted\n" +
-                    "3. OAuth is configured with your STS/ADFS\n" +
-                    "Original error: " + ex.Message, ex);
+                    "App authentication failed. Ensure the app is registered and has proper permissions.", ex);
             }
             
             return context;
         }
 
-        private ClientContext GetUserContext(string siteUrl)
+        private ClientContext GetUserCredentialContext(string siteUrl)
         {
             var context = new ClientContext(siteUrl);
             
-            // Use current Windows credentials
-            context.Credentials = CredentialCache.DefaultNetworkCredentials;
-            
-            // Alternatively, prompt for credentials
-            // context.Credentials = GetUserCredentials();
-            
-            return context;
-        }
-
-        private NetworkCredential GetUserCredentials()
-        {
-            // In a real application, you might want to:
-            // 1. Show a credential dialog
-            // 2. Use stored credentials
-            // 3. Use Windows Credential Manager
-            
-            Console.Write("Enter username: ");
-            var username = Console.ReadLine();
-            
-            Console.Write("Enter password: ");
-            var password = GetSecurePassword();
-            
-            Console.Write("Enter domain (optional): ");
-            var domain = Console.ReadLine();
-            
-            return new NetworkCredential(username, password, domain);
-        }
-
-        private SecureString GetSecurePassword()
-        {
-            var securePassword = new SecureString();
-            ConsoleKeyInfo key;
-            
-            do
+            // First try default network credentials (for domain-joined machines)
+            try
             {
-                key = Console.ReadKey(true);
-                if (key.Key != ConsoleKey.Backspace && key.Key != ConsoleKey.Enter)
-                {
-                    securePassword.AppendChar(key.KeyChar);
-                    Console.Write("*");
-                }
-                else if (key.Key == ConsoleKey.Backspace && securePassword.Length > 0)
-                {
-                    securePassword.RemoveAt(securePassword.Length - 1);
-                    Console.Write("\b \b");
-                }
+                context.Credentials = CredentialCache.DefaultNetworkCredentials;
+                
+                // Test the connection
+                context.Load(context.Web, w => w.Title);
+                context.ExecuteQuery();
+                
+                return context;
             }
-            while (key.Key != ConsoleKey.Enter);
+            catch
+            {
+                // If default credentials fail, prompt for credentials
+                var credentials = PromptForCredentials(siteUrl);
+                if (credentials != null)
+                {
+                    context.Credentials = credentials;
+                    return context;
+                }
+                
+                throw new InvalidOperationException("Authentication cancelled by user.");
+            }
+        }
+
+        private NetworkCredential PromptForCredentials(string siteUrl)
+        {
+            // Create a simple credential dialog
+            var dialog = new Window
+            {
+                Title = "SharePoint Authentication",
+                Width = 400,
+                Height = 250,
+                WindowStartupLocation = WindowStartupLocation.CenterScreen,
+                ResizeMode = ResizeMode.NoResize
+            };
+
+            var grid = new System.Windows.Controls.Grid();
+            grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto });
+            grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto });
+            grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto });
+            grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto });
+            grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto });
+            grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto });
+
+            var lblInfo = new System.Windows.Controls.TextBlock
+            {
+                Text = $"Enter credentials for:\n{siteUrl}",
+                Margin = new Thickness(10),
+                TextWrapping = System.Windows.TextWrapping.Wrap
+            };
+            System.Windows.Controls.Grid.SetRow(lblInfo, 0);
+            grid.Children.Add(lblInfo);
+
+            var lblUsername = new System.Windows.Controls.Label { Content = "Username:", Margin = new Thickness(10, 5, 10, 0) };
+            System.Windows.Controls.Grid.SetRow(lblUsername, 1);
+            grid.Children.Add(lblUsername);
+
+            var txtUsername = new System.Windows.Controls.TextBox { Margin = new Thickness(10, 0, 10, 5) };
+            System.Windows.Controls.Grid.SetRow(txtUsername, 2);
+            grid.Children.Add(txtUsername);
+
+            var lblPassword = new System.Windows.Controls.Label { Content = "Password:", Margin = new Thickness(10, 5, 10, 0) };
+            System.Windows.Controls.Grid.SetRow(lblPassword, 3);
+            grid.Children.Add(lblPassword);
+
+            var txtPassword = new System.Windows.Controls.PasswordBox { Margin = new Thickness(10, 0, 10, 5) };
+            System.Windows.Controls.Grid.SetRow(txtPassword, 4);
+            grid.Children.Add(txtPassword);
+
+            var buttonPanel = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
+                Margin = new Thickness(10)
+            };
+
+            var btnOk = new System.Windows.Controls.Button
+            {
+                Content = "OK",
+                Width = 75,
+                Margin = new Thickness(5),
+                IsDefault = true
+            };
+
+            var btnCancel = new System.Windows.Controls.Button
+            {
+                Content = "Cancel",
+                Width = 75,
+                Margin = new Thickness(5),
+                IsCancel = true
+            };
+
+            NetworkCredential result = null;
+
+            btnOk.Click += (s, e) =>
+            {
+                if (!string.IsNullOrEmpty(txtUsername.Text))
+                {
+                    var username = txtUsername.Text;
+                    var password = txtPassword.SecurePassword;
+                    
+                    // Parse domain from username if provided
+                    string domain = "";
+                    if (username.Contains("\\"))
+                    {
+                        var parts = username.Split('\\');
+                        domain = parts[0];
+                        username = parts[1];
+                    }
+                    
+                    result = new NetworkCredential(username, password, domain);
+                    dialog.DialogResult = true;
+                }
+            };
+
+            btnCancel.Click += (s, e) =>
+            {
+                dialog.DialogResult = false;
+            };
+
+            buttonPanel.Children.Add(btnOk);
+            buttonPanel.Children.Add(btnCancel);
+            System.Windows.Controls.Grid.SetRow(buttonPanel, 5);
+            grid.Children.Add(buttonPanel);
+
+            dialog.Content = grid;
             
-            Console.WriteLine();
-            return securePassword;
+            return dialog.ShowDialog() == true ? result : null;
+        }
+
+        private string GetAppOnlyAccessToken(Uri siteUri, string realm)
+        {
+            // For SharePoint 2016 on-premises, you need to implement based on your OAuth configuration
+            // This is a placeholder that shows the structure
+            
+            var resource = $"{_clientId}/{siteUri.Host}@{realm}";
+            var clientId = $"{_clientId}@{realm}";
+            
+            // In production, implement proper OAuth token request based on your STS configuration
+            // This might involve:
+            // 1. Getting token from ADFS
+            // 2. Using ACS (Access Control Service) if configured
+            // 3. Using custom STS implementation
+            
+            throw new NotImplementedException(
+                "App-only token acquisition needs to be implemented based on your SharePoint 2016 OAuth configuration.\n" +
+                "Please implement the token acquisition logic for your specific environment.");
         }
 
         private X509Certificate2 GetCertificateFromStore(string thumbprint)
@@ -190,14 +297,14 @@ namespace MigratedSiteRedirectionApp.Service
         private string CreateHighTrustAccessToken(string clientId, string issuerId, string realm, string siteUrl, X509Certificate2 certificate)
         {
             // Create JWT token for High-Trust authentication
-            var claims = new List<System.Security.Claims.Claim>
+            var claims = new Dictionary<string, object>
             {
-                new System.Security.Claims.Claim("aud", $"{clientId}/{new Uri(siteUrl).Host}@{realm}"),
-                new System.Security.Claims.Claim("iss", $"{issuerId}@{realm}"),
-                new System.Security.Claims.Claim("nbf", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()),
-                new System.Security.Claims.Claim("exp", DateTimeOffset.UtcNow.AddMinutes(60).ToUnixTimeSeconds().ToString()),
-                new System.Security.Claims.Claim("nameid", $"{clientId}@{realm}"),
-                new System.Security.Claims.Claim("trustedfordelegation", "true")
+                { "aud", $"{clientId}/{new Uri(siteUrl).Host}@{realm}" },
+                { "iss", $"{issuerId}@{realm}" },
+                { "nbf", DateTimeOffset.UtcNow.ToUnixTimeSeconds() },
+                { "exp", DateTimeOffset.UtcNow.AddMinutes(60).ToUnixTimeSeconds() },
+                { "nameid", $"{clientId}@{realm}" },
+                { "trustedfordelegation", "true" }
             };
 
             var header = new JwtHeader(
