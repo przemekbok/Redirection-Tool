@@ -1,29 +1,24 @@
 using System;
-using System.Security;
 using System.Threading.Tasks;
 using Microsoft.SharePoint.Client;
-using System.Configuration;
-using System.Net;
+using System.Linq;
 
 namespace MigratedSiteRedirectionApp.Service
 {
     public class SharePoint2016Service
     {
-        private readonly string _clientId;
-        private readonly string _clientSecret;
+        private readonly SharePointAuthenticationHelper _authHelper;
 
         public SharePoint2016Service()
         {
-            // Load configuration from app settings
-            _clientId = ConfigurationManager.AppSettings["SharePointClientId"];
-            _clientSecret = ConfigurationManager.AppSettings["SharePointClientSecret"];
+            _authHelper = new SharePointAuthenticationHelper();
         }
 
         public async Task<ServiceResult> ApplyBannerAndCustomAction(string siteUrl, string bannerMessage, string jsCode)
         {
             try
             {
-                using (var context = GetClientContext(siteUrl))
+                using (var context = _authHelper.GetAuthenticatedContext(siteUrl))
                 {
                     var site = context.Site;
                     var userCustomActions = site.UserCustomActions;
@@ -58,7 +53,7 @@ namespace MigratedSiteRedirectionApp.Service
                     return new ServiceResult
                     {
                         IsSuccess = true,
-                        Message = "Banner and custom action have been successfully applied to the site collection."
+                        Message = "Red banner and custom action have been successfully applied to the site collection."
                     };
                 }
             }
@@ -77,7 +72,7 @@ namespace MigratedSiteRedirectionApp.Service
         {
             try
             {
-                using (var context = GetClientContext(siteUrl))
+                using (var context = _authHelper.GetAuthenticatedContext(siteUrl))
                 {
                     var site = context.Site;
                     var userCustomActions = site.UserCustomActions;
@@ -105,90 +100,12 @@ namespace MigratedSiteRedirectionApp.Service
             }
         }
 
-        private ClientContext GetClientContext(string siteUrl)
-        {
-            if (string.IsNullOrEmpty(_clientId) || string.IsNullOrEmpty(_clientSecret))
-            {
-                throw new InvalidOperationException("SharePoint Client ID and Client Secret must be configured in app.config");
-            }
-
-            var context = new ClientContext(siteUrl);
-            
-            // App-only authentication for SharePoint 2016
-            var realm = GetRealmFromTargetUrl(new Uri(siteUrl));
-            var accessToken = GetAppOnlyAccessToken(_clientId, _clientSecret, siteUrl, realm);
-            
-            context.ExecutingWebRequest += (sender, e) =>
-            {
-                e.WebRequestExecutor.RequestHeaders["Authorization"] = "Bearer " + accessToken;
-            };
-
-            return context;
-        }
-
-        private string GetRealmFromTargetUrl(Uri targetApplicationUri)
-        {
-            WebRequest request = WebRequest.Create(targetApplicationUri + "/_vti_bin/client.svc");
-            request.Headers.Add("Authorization: Bearer ");
-            request.Method = "GET";
-
-            try
-            {
-                using (var response = request.GetResponse())
-                {
-                    // This will fail but the header will contain the realm
-                }
-            }
-            catch (WebException e)
-            {
-                if (e.Response == null)
-                    return null;
-
-                var bearerResponseHeader = e.Response.Headers["WWW-Authenticate"];
-                if (string.IsNullOrEmpty(bearerResponseHeader))
-                    return null;
-
-                const string bearer = "Bearer realm=\"";
-                var bearerIndex = bearerResponseHeader.IndexOf(bearer, StringComparison.Ordinal);
-                if (bearerIndex < 0)
-                    return null;
-
-                var realmIndex = bearerIndex + bearer.Length;
-                if (bearerResponseHeader.Length < realmIndex + 36)
-                    return null;
-
-                return bearerResponseHeader.Substring(realmIndex, 36);
-            }
-
-            return null;
-        }
-
-        private string GetAppOnlyAccessToken(string clientId, string clientSecret, string siteUrl, string realm)
-        {
-            // For SharePoint 2016 on-premises, you might need to adjust this based on your STS configuration
-            // This is a simplified version - in production, use proper OAuth implementation
-            
-            // Note: For on-premises SharePoint 2016, you might need to use:
-            // - High Trust Provider-Hosted Apps with certificate authentication
-            // - Or configure OAuth with your ADFS/STS
-            
-            throw new NotImplementedException(
-                "App-only authentication implementation depends on your SharePoint 2016 configuration. " +
-                "Please implement based on your authentication setup (High Trust Apps or OAuth with ADFS).");
-        }
-
         private async Task RemoveExistingCustomActions(ClientContext context, UserCustomActionCollection userCustomActions)
         {
-            var actionsToRemove = new System.Collections.Generic.List<UserCustomAction>();
-            
-            foreach (var action in userCustomActions)
-            {
-                if (action.Name == "SharePointBannerManager_Banner" || 
-                    action.Name == "SharePointBannerManager_CustomJS")
-                {
-                    actionsToRemove.Add(action);
-                }
-            }
+            var actionsToRemove = userCustomActions
+                .Where(action => action.Name == "SharePointBannerManager_Banner" || 
+                                action.Name == "SharePointBannerManager_CustomJS")
+                .ToList();
             
             foreach (var action in actionsToRemove)
             {
@@ -217,39 +134,66 @@ namespace MigratedSiteRedirectionApp.Service
     'use strict';
     
     function showRedBanner() {{
-        // For classic SharePoint pages using SP.UI.Notify
-        if (typeof SP !== 'undefined' && SP.UI && SP.UI.Notify) {{
+        // For classic SharePoint pages using SP.UI.Status (red status bar)
+        if (typeof SP !== 'undefined' && SP.UI && SP.UI.Status) {{
             SP.SOD.executeFunc('sp.js', 'SP.ClientContext', function() {{
-                // Create a custom notification with red background
-                var notificationHtml = '<div style=""background-color: #dc3545; color: white; padding: 10px; margin: -10px; font-weight: bold;"">' + 
-                                      '{escapedMessage}' + 
-                                      '</div>';
-                var notificationId = SP.UI.Notify.addNotification(notificationHtml, false);
+                // Create a red status bar (more prominent than notification)
+                var statusId = SP.UI.Status.addStatus('{escapedMessage}');
+                SP.UI.Status.setStatusPriColor(statusId, 'red');
                 
-                // Make the notification persistent (don't auto-hide)
-                window.SharePointBannerNotificationId = notificationId;
+                // Store the status ID for potential removal
+                window.SharePointBannerStatusId = statusId;
             }});
         }} else {{
             // Fallback for modern pages or when SP.UI is not available
-            if (!document.getElementById('sharepoint-banner-manager-banner')) {{
-                var banner = document.createElement('div');
-                banner.id = 'sharepoint-banner-manager-banner';
-                banner.style.cssText = 'background-color: #dc3545; color: white; padding: 15px 20px; border-bottom: 2px solid #c82333; font-size: 14px; font-weight: bold; position: fixed; top: 0; left: 0; right: 0; z-index: 10000; box-shadow: 0 2px 4px rgba(0,0,0,0.2);';
-                banner.innerHTML = '{escapedMessage}';
-                
-                // Add close button
-                var closeBtn = document.createElement('span');
-                closeBtn.style.cssText = 'float: right; cursor: pointer; font-size: 20px; line-height: 1; margin-left: 15px;';
-                closeBtn.innerHTML = '&times;';
-                closeBtn.onclick = function() {{
-                    banner.style.display = 'none';
-                    document.body.style.paddingTop = '0';
-                }};
-                banner.insertBefore(closeBtn, banner.firstChild);
-                
-                document.body.insertBefore(banner, document.body.firstChild);
-                document.body.style.paddingTop = (banner.offsetHeight + 'px');
+            createFallbackBanner();
+        }}
+    }}
+    
+    function createFallbackBanner() {{
+        if (!document.getElementById('sharepoint-banner-manager-banner')) {{
+            var banner = document.createElement('div');
+            banner.id = 'sharepoint-banner-manager-banner';
+            banner.style.cssText = 'background-color: #dc3545; color: white; padding: 15px 20px; border-bottom: 2px solid #c82333; font-size: 14px; font-weight: bold; position: fixed; top: 0; left: 0; right: 0; z-index: 10000; box-shadow: 0 2px 4px rgba(0,0,0,0.2); text-align: center;';
+            
+            // Create message container
+            var messageContainer = document.createElement('div');
+            messageContainer.style.cssText = 'display: inline-block; max-width: 90%; margin: 0 auto;';
+            messageContainer.innerHTML = '{escapedMessage}';
+            
+            // Add close button
+            var closeBtn = document.createElement('span');
+            closeBtn.style.cssText = 'position: absolute; right: 20px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 20px; line-height: 1; opacity: 0.8;';
+            closeBtn.innerHTML = '&times;';
+            closeBtn.title = 'Close banner';
+            closeBtn.onmouseover = function() {{ closeBtn.style.opacity = '1'; }};
+            closeBtn.onmouseout = function() {{ closeBtn.style.opacity = '0.8'; }};
+            closeBtn.onclick = function() {{
+                banner.style.display = 'none';
+                document.body.style.paddingTop = '0';
+                // Store preference in session storage
+                if (typeof sessionStorage !== 'undefined') {{
+                    sessionStorage.setItem('sharepoint-banner-hidden', 'true');
+                }}
+            }};
+            
+            banner.appendChild(messageContainer);
+            banner.appendChild(closeBtn);
+            
+            // Check if banner was previously closed in this session
+            if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('sharepoint-banner-hidden') === 'true') {{
+                return;
             }}
+            
+            document.body.insertBefore(banner, document.body.firstChild);
+            document.body.style.paddingTop = (banner.offsetHeight + 'px');
+            
+            // Adjust padding on window resize
+            window.addEventListener('resize', function() {{
+                if (banner.style.display !== 'none') {{
+                    document.body.style.paddingTop = (banner.offsetHeight + 'px');
+                }}
+            }});
         }}
     }}
     
@@ -264,6 +208,13 @@ namespace MigratedSiteRedirectionApp.Service
     if (typeof _spBodyOnLoadFunctionNames !== 'undefined') {{
         _spBodyOnLoadFunctionNames.push('showRedBanner');
         window.showRedBanner = showRedBanner;
+    }}
+    
+    // For modern pages, also try on window load
+    if (window.addEventListener) {{
+        window.addEventListener('load', function() {{
+            setTimeout(showRedBanner, 100);
+        }});
     }}
 }})();
 ";
