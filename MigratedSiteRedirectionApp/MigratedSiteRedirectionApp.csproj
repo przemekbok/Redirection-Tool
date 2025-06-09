@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -7,5 +7,17 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- SharePoint CSOM Packages -->
+    <PackageReference Include="Microsoft.SharePointOnline.CSOM" Version="16.1.24723.12000" />
+    
+    <!-- Configuration Support -->
+    <PackageReference Include="System.Configuration.ConfigurationManager" Version="8.0.0" />
+    
+    <!-- Additional Dependencies for Authentication -->
+    <PackageReference Include="Microsoft.Identity.Client" Version="4.61.3" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="7.6.0" />
+  </ItemGroup>
 
 </Project>
